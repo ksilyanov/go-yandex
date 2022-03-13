@@ -47,6 +47,9 @@ func GetRouter(repository storage.URLRepository) chi.Router {
 
 	r.Post("/", handlers.SaveURL(repository))
 	r.Get("/{id}", handlers.GetURL(repository))
+	r.Route("/api", func(r chi.Router) {
+		r.Post("/shorten", handlers.SaveURLJson(repository))
+	})
 
 	return r
 }

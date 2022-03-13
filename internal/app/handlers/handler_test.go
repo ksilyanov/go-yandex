@@ -40,6 +40,14 @@ func TestRouter(t *testing.T) {
 			"",
 		},
 		{
+			"/api/shorten",
+			http.MethodPost,
+			"{\"url\":\"https://github.com\"}",
+			http.StatusCreated,
+			"{\"result\":\"http://localhost:8080/3\"}\n",
+			"",
+		},
+		{
 			"1",
 			http.MethodGet,
 			"",
@@ -63,7 +71,11 @@ func TestRouter(t *testing.T) {
 		writer := httptest.NewRecorder()
 
 		if tc.method == http.MethodPost {
-			SaveURL(testRep)(writer, request)
+			if tc.path == "/api/shorten" {
+				SaveURLJson(testRep)(writer, request)
+			} else {
+				SaveURL(testRep)(writer, request)
+			}
 		}
 
 		if tc.method == http.MethodGet {
@@ -80,7 +92,11 @@ func TestRouter(t *testing.T) {
 		assert.Equal(t, tc.expectedStatus, result.StatusCode)
 
 		if tc.method == http.MethodPost {
-			assert.Equal(t, "http://localhost:8080/"+tc.expectedPath, string(respBody))
+			if tc.path == "/api/shorten" {
+				assert.Equal(t, tc.expectedPath, string(respBody))
+			} else {
+				assert.Equal(t, "http://localhost:8080/"+tc.expectedPath, string(respBody))
+			}
 		}
 
 		if tc.method == http.MethodGet {
