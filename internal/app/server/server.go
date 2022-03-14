@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"go-yandex/internal/app/config"
 	"go-yandex/internal/app/handlers"
 	"go-yandex/internal/app/storage"
 	"log"
@@ -15,14 +16,14 @@ type Server interface {
 }
 
 type server struct {
-	url        string
 	repository storage.URLRepository
+	config     config.Config
 }
 
-func New(addr string, rep storage.URLRepository) *server {
+func New(rep storage.URLRepository, config config.Config) *server {
 	return &server{
-		addr,
 		rep,
+		config,
 	}
 }
 
@@ -30,7 +31,7 @@ func (s *server) Start(ctx context.Context) error {
 
 	ctx, cancel := context.WithCancel(ctx)
 	go func() {
-		if err := http.ListenAndServe(s.url, GetRouter(s.repository)); err != nil && err != http.ErrServerClosed {
+		if err := http.ListenAndServe(s.config.ServerURL, GetRouter(s.repository, s.config)); err != nil && err != http.ErrServerClosed {
 			log.Printf("listener failed:+%v\n", err)
 			cancel()
 		}
@@ -41,14 +42,14 @@ func (s *server) Start(ctx context.Context) error {
 	return nil
 }
 
-func GetRouter(repository storage.URLRepository) chi.Router {
+func GetRouter(repository storage.URLRepository, config config.Config) chi.Router {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
-	r.Post("/", handlers.SaveURL(repository))
+	r.Post("/", handlers.SaveURL(repository, config))
 	r.Get("/{id}", handlers.GetURL(repository))
 	r.Route("/api", func(r chi.Router) {
-		r.Post("/shorten", handlers.SaveURLJson(repository))
+		r.Post("/shorten", handlers.SaveURLJson(repository, config))
 	})
 
 	return r

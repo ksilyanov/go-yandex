@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"go-yandex/internal/app/config"
 	"go-yandex/internal/app/storage"
 	"io"
 	"net/http"
@@ -38,7 +39,7 @@ func GetURL(repository storage.URLRepository) func(writer http.ResponseWriter, r
 	}
 }
 
-func SaveURL(repository storage.URLRepository) func(writer http.ResponseWriter, request *http.Request) {
+func SaveURL(repository storage.URLRepository, config config.Config) func(writer http.ResponseWriter, request *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		data, err := io.ReadAll(request.Body)
 		if err != nil {
@@ -54,11 +55,11 @@ func SaveURL(repository storage.URLRepository) func(writer http.ResponseWriter, 
 
 		writer.Header().Set("content-type", "application/json")
 		writer.WriteHeader(http.StatusCreated)
-		writer.Write([]byte("http://localhost:8080/" + res))
+		writer.Write([]byte(config.BaseURL + "/" + res))
 	}
 }
 
-func SaveURLJson(repository storage.URLRepository) func(writer http.ResponseWriter, request *http.Request) {
+func SaveURLJson(repository storage.URLRepository, config config.Config) func(writer http.ResponseWriter, request *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		var apiItem apiItem
 		err := json.NewDecoder(request.Body).Decode(&apiItem)
@@ -76,7 +77,7 @@ func SaveURLJson(repository storage.URLRepository) func(writer http.ResponseWrit
 		}
 
 		var buf bytes.Buffer
-		apiRes := apiResult{ShortURL: "http://localhost:8080/" + res}
+		apiRes := apiResult{ShortURL: config.BaseURL + "/" + res}
 		err = json.NewEncoder(&buf).Encode(apiRes)
 		if err != nil {
 			http.Error(writer, err.Error(), http.StatusInternalServerError)
