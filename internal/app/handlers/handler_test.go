@@ -68,7 +68,7 @@ func TestRouter(t *testing.T) {
 		},
 	}
 
-	var testRep = storage.New()
+	var testRep = storage.New(config.GetConfig())
 	for _, tc := range urlsOrder {
 		request := httptest.NewRequest(tc.method, currentConfig.BaseURL+"/"+tc.path, bytes.NewBufferString(tc.bodyStr))
 		writer := httptest.NewRecorder()

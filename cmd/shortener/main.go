@@ -9,7 +9,8 @@ import (
 )
 
 func main() {
-	s := server.New(storage.New(), config.GetConfig())
+	curConfig := config.GetConfig()
+	s := server.New(storage.New(curConfig), curConfig)
 
 	ctx := context.Background()
 
