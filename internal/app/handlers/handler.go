@@ -86,7 +86,7 @@ func SaveURLJson(repository storage.URLRepository, config config.Config) func(wr
 
 		writer.Header().Set("content-type", "application/json")
 		writer.WriteHeader(http.StatusCreated)
-		_, err = writer.Write([]byte(buf.String()))
+		_, err = writer.Write(buf.Bytes())
 
 		if err != nil {
 			http.Error(writer, err.Error(), http.StatusInternalServerError)
