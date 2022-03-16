@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"go-yandex/internal/app/config"
 	"os"
 	"strconv"
@@ -72,7 +71,7 @@ func (r *FileRepository) Store(newURL string) (string, error) {
 
 	writer := bufio.NewWriter(file)
 	data, err := json.Marshal(&newItem)
-	fmt.Println(data, newItem)
+
 	if err != nil {
 		return "", err
 	}
@@ -90,15 +89,15 @@ func (r *FileRepository) Store(newURL string) (string, error) {
 	return newItem.ShortURL, nil
 }
 
-func (r *FileRepository) Find(shortUrl string) (string, error) {
+func (r *FileRepository) Find(shortURL string) (string, error) {
 	file, err := os.OpenFile(r.fileStoragePath, os.O_APPEND|os.O_CREATE|os.O_RDONLY, 0777)
 	if err != nil {
 		return "", err
 	}
 	defer file.Close()
 
-	var shortUrlInt int
-	shortUrlInt, err = strconv.Atoi(shortUrl)
+	var shortURLInt int
+	shortURLInt, err = strconv.Atoi(shortURL)
 	if err != nil {
 		return "", err
 	}
@@ -107,7 +106,7 @@ func (r *FileRepository) Find(shortUrl string) (string, error) {
 	ln := 0
 	for scanner.Scan() {
 		ln++
-		if ln == shortUrlInt {
+		if ln == shortURLInt {
 			data := scanner.Bytes()
 
 			item := item{}
