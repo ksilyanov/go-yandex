@@ -22,7 +22,11 @@ func init() {
 }
 
 func main() {
-	curConfig := config.GetConfig()
+	curConfig, err := config.GetConfig()
+	if err != nil {
+		log.Print(err.Error())
+		return
+	}
 
 	flag.Parse()
 	if *serverURL != "" {
@@ -39,7 +43,7 @@ func main() {
 
 	ctx := context.Background()
 
-	if e := s.Start(ctx); e != nil {
-		log.Print(e)
+	if err := s.Start(ctx); err != nil {
+		log.Print(err)
 	}
 }

@@ -10,11 +10,11 @@ type Config struct {
 	FileStoragePath string `env:"FILE_STORAGE_PATH" envDefault:""`
 }
 
-func GetConfig() Config {
-	config := &Config{}
+func GetConfig() (Config, error) {
+	config := Config{}
 	err := env.Parse(config)
 	if err != nil {
-		panic(err.Error())
+		return Config{}, err
 	}
-	return *config
+	return config, nil
 }
