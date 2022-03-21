@@ -23,7 +23,8 @@ type urls []struct {
 
 func TestRouter(t *testing.T) {
 
-	currentConfig := config.GetConfig()
+	currentConfig, err := config.GetConfig()
+	require.NoError(t, err)
 
 	urlsOrder := urls{
 		{
@@ -68,7 +69,7 @@ func TestRouter(t *testing.T) {
 		},
 	}
 
-	var testRep = storage.New(config.GetConfig())
+	var testRep = storage.New(currentConfig)
 	for _, tc := range urlsOrder {
 		request := httptest.NewRequest(tc.method, currentConfig.BaseURL+"/"+tc.path, bytes.NewBufferString(tc.bodyStr))
 		writer := httptest.NewRecorder()
