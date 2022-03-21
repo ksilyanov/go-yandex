@@ -11,10 +11,10 @@ type Config struct {
 }
 
 func GetConfig() (Config, error) {
-	config := Config{}
+	config := &Config{}
 	err := env.Parse(config)
 	if err != nil {
-		return Config{}, err
+		return *config, err
 	}
-	return config, nil
+	return *config, nil
 }
