@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go-yandex/internal/app/config"
 	"go-yandex/internal/app/storage"
 	"io/ioutil"
 	"net/http"
@@ -22,6 +23,9 @@ type urls []struct {
 
 func TestRouter(t *testing.T) {
 
+	currentConfig, err := config.GetConfig()
+	require.NoError(t, err)
+
 	urlsOrder := urls{
 		{
 			"/",
@@ -37,6 +41,14 @@ func TestRouter(t *testing.T) {
 			"https://www.google.com",
 			http.StatusCreated,
 			"2",
+			"",
+		},
+		{
+			"/api/shorten",
+			http.MethodPost,
+			"{\"url\":\"https://github.com\"}",
+			http.StatusCreated,
+			"{\"result\":\"" + currentConfig.BaseURL + "/3\"}\n",
 			"",
 		},
 		{
@@ -57,13 +69,17 @@ func TestRouter(t *testing.T) {
 		},
 	}
 
-	var testRep = storage.New()
+	var testRep = storage.New(currentConfig)
 	for _, tc := range urlsOrder {
-		request := httptest.NewRequest(tc.method, "http://localhost:8080/"+tc.path, bytes.NewBufferString(tc.bodyStr))
+		request := httptest.NewRequest(tc.method, currentConfig.BaseURL+"/"+tc.path, bytes.NewBufferString(tc.bodyStr))
 		writer := httptest.NewRecorder()
 
 		if tc.method == http.MethodPost {
-			SaveURL(testRep)(writer, request)
+			if tc.path == "/api/shorten" {
+				SaveURLJson(testRep, currentConfig)(writer, request)
+			} else {
+				SaveURL(testRep, currentConfig)(writer, request)
+			}
 		}
 
 		if tc.method == http.MethodGet {
@@ -80,7 +96,11 @@ func TestRouter(t *testing.T) {
 		assert.Equal(t, tc.expectedStatus, result.StatusCode)
 
 		if tc.method == http.MethodPost {
-			assert.Equal(t, "http://localhost:8080/"+tc.expectedPath, string(respBody))
+			if tc.path == "/api/shorten" {
+				assert.Equal(t, tc.expectedPath, string(respBody))
+			} else {
+				assert.Equal(t, currentConfig.BaseURL+"/"+tc.expectedPath, string(respBody))
+			}
 		}
 
 		if tc.method == http.MethodGet {

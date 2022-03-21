@@ -1,11 +1,23 @@
 package handlers
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"go-yandex/internal/app/config"
 	"go-yandex/internal/app/storage"
 	"io"
 	"net/http"
 	"strings"
 )
+
+type apiItem struct {
+	FullURL string `json:"url"`
+}
+
+type apiResult struct {
+	ShortURL string `json:"result"`
+}
 
 func GetURL(repository storage.URLRepository) func(writer http.ResponseWriter, request *http.Request) {
 
@@ -27,7 +39,7 @@ func GetURL(repository storage.URLRepository) func(writer http.ResponseWriter, r
 	}
 }
 
-func SaveURL(repository storage.URLRepository) func(writer http.ResponseWriter, request *http.Request) {
+func SaveURL(repository storage.URLRepository, config config.Config) func(writer http.ResponseWriter, request *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		data, err := io.ReadAll(request.Body)
 		if err != nil {
@@ -43,6 +55,42 @@ func SaveURL(repository storage.URLRepository) func(writer http.ResponseWriter, 
 
 		writer.Header().Set("content-type", "application/json")
 		writer.WriteHeader(http.StatusCreated)
-		writer.Write([]byte("http://localhost:8080/" + res))
+		writer.Write([]byte(config.BaseURL + "/" + res))
+	}
+}
+
+func SaveURLJson(repository storage.URLRepository, config config.Config) func(writer http.ResponseWriter, request *http.Request) {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		var apiItem apiItem
+		err := json.NewDecoder(request.Body).Decode(&apiItem)
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		fmt.Println(apiItem)
+
+		res, err := repository.Store(apiItem.FullURL)
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		var buf bytes.Buffer
+		apiRes := apiResult{ShortURL: config.BaseURL + "/" + res}
+		err = json.NewEncoder(&buf).Encode(apiRes)
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		writer.Header().Set("content-type", "application/json")
+		writer.WriteHeader(http.StatusCreated)
+		_, err = writer.Write(buf.Bytes())
+
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 }
