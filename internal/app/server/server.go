@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"go-yandex/internal/app/compressor"
 	"go-yandex/internal/app/config"
 	"go-yandex/internal/app/handlers"
 	"go-yandex/internal/app/storage"
@@ -44,7 +45,10 @@ func (s *server) Start(ctx context.Context) error {
 
 func GetRouter(repository storage.URLRepository, config config.Config) chi.Router {
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+	r.Use(
+		middleware.Logger,
+		compressor.GzipHandle,
+	)
 
 	r.Post("/", handlers.SaveURL(repository, config))
 	r.Get("/{id}", handlers.GetURL(repository))
