@@ -11,35 +11,43 @@ import (
 
 type URLRepository interface {
 	Find(shortURL string) (string, error)
-	Store(url string) (string, error)
+	Store(url string, userToken string) (string, error)
+	GetByUser(token string) ([]ItemUrls, error)
 }
 
 type item struct {
 	FullURL  string `json:"full_url"`
 	ShortURL string `json:"short_url"`
+	User     string `json:"user"`
+}
+
+type ItemUrls struct {
+	ShortURL string `json:"short_url"`
+	FullURL  string `json:"original_url"`
 }
 
 type Repository struct {
-	items []item
+	config config.Config
+	items  []item
 }
 
 type FileRepository struct {
-	fileStoragePath string
+	config config.Config
 }
 
 func New(config config.Config) URLRepository {
 	var r URLRepository
 	if config.FileStoragePath != "" {
-		r = &FileRepository{config.FileStoragePath}
+		r = &FileRepository{config}
 	} else {
-		r = &Repository{}
+		r = &Repository{config: config}
 	}
 
 	return r
 }
 
-func (r *FileRepository) Store(newURL string) (string, error) {
-	file, err := os.OpenFile(r.fileStoragePath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0777)
+func (r *FileRepository) Store(newURL string, userToken string) (string, error) {
+	file, err := os.OpenFile(r.config.FileStoragePath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0777)
 	if err != nil {
 		return "", err
 	}
@@ -66,7 +74,8 @@ func (r *FileRepository) Store(newURL string) (string, error) {
 
 	newItem := item{
 		newURL,
-		strconv.Itoa(ln + 1),
+		r.config.BaseURL + "/" + strconv.Itoa(ln+1),
+		userToken,
 	}
 
 	writer := bufio.NewWriter(file)
@@ -90,7 +99,7 @@ func (r *FileRepository) Store(newURL string) (string, error) {
 }
 
 func (r *FileRepository) Find(shortURL string) (string, error) {
-	file, err := os.OpenFile(r.fileStoragePath, os.O_APPEND|os.O_CREATE|os.O_RDONLY, 0777)
+	file, err := os.OpenFile(r.config.FileStoragePath, os.O_APPEND|os.O_CREATE|os.O_RDONLY, 0777)
 	if err != nil {
 		return "", err
 	}
@@ -122,7 +131,36 @@ func (r *FileRepository) Find(shortURL string) (string, error) {
 	return "", errors.New("not found")
 }
 
-func (r *Repository) Store(u string) (string, error) {
+func (r *FileRepository) GetByUser(token string) ([]ItemUrls, error) {
+	file, err := os.OpenFile(r.config.FileStoragePath, os.O_APPEND|os.O_CREATE|os.O_RDONLY, 0777)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var items []ItemUrls
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		item := item{}
+		data := scanner.Bytes()
+		err := json.Unmarshal(data, &item)
+		if err != nil {
+			return nil, err
+		}
+
+		if token == item.User {
+			items = append(items, ItemUrls{
+				item.ShortURL,
+				item.FullURL,
+			})
+		}
+	}
+
+	return items, nil
+}
+
+func (r *Repository) Store(u string, userToken string) (string, error) {
 
 	for i := 0; i < len(r.items); i++ {
 		if r.items[i].FullURL == u {
@@ -130,10 +168,16 @@ func (r *Repository) Store(u string) (string, error) {
 		}
 	}
 
-	newItem := item{FullURL: u}
+	curLen := len(r.items)
+
+	newItem := item{
+		FullURL:  u,
+		ShortURL: r.config.BaseURL + "/" + strconv.Itoa(curLen+1),
+		User:     userToken,
+	}
 	r.items = append(r.items, newItem)
-	result := len(r.items)
-	return strconv.Itoa(result), nil
+
+	return newItem.ShortURL, nil
 }
 
 func (r *Repository) Find(shortURL string) (string, error) {
@@ -153,4 +197,21 @@ func (r *Repository) Find(shortURL string) (string, error) {
 	}
 
 	return "", err
+}
+
+func (r *Repository) GetByUser(token string) ([]ItemUrls, error) {
+
+	var res []ItemUrls
+
+	for i := range r.items {
+		if r.items[i].User == token {
+			resItem := ItemUrls{
+				r.items[i].ShortURL,
+				r.items[i].FullURL,
+			}
+			res = append(res, resItem)
+		}
+	}
+
+	return res, nil
 }

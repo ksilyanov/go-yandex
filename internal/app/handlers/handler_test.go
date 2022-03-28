@@ -2,13 +2,17 @@ package handlers
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go-yandex/internal/app/config"
+	"go-yandex/internal/app/middlewares/cookieManager"
 	"go-yandex/internal/app/storage"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 )
 
@@ -70,9 +74,15 @@ func TestRouter(t *testing.T) {
 	}
 
 	var testRep = storage.New(currentConfig)
+	curCookie, err := cookieManager.GenerateCookie()
+	require.NoError(t, err)
+
 	for _, tc := range urlsOrder {
 		request := httptest.NewRequest(tc.method, currentConfig.BaseURL+"/"+tc.path, bytes.NewBufferString(tc.bodyStr))
 		writer := httptest.NewRecorder()
+
+		ctx := context.WithValue(request.Context(), cookieManager.CookieName, curCookie.Value)
+		request = request.WithContext(ctx)
 
 		if tc.method == http.MethodPost {
 			if tc.path == "/api/shorten" {
@@ -87,6 +97,7 @@ func TestRouter(t *testing.T) {
 		}
 
 		result := writer.Result()
+		writer.Flush()
 
 		respBody, err := ioutil.ReadAll(result.Body)
 		require.NoError(t, err)
@@ -107,4 +118,44 @@ func TestRouter(t *testing.T) {
 			assert.Equal(t, tc.expectedLocation, result.Header.Get("Location"))
 		}
 	}
+
+	request := httptest.NewRequest(http.MethodGet, currentConfig.BaseURL+"/user/urls", nil)
+	writer := httptest.NewRecorder()
+	ctx := context.WithValue(request.Context(), cookieManager.CookieName, curCookie.Value)
+	request = request.WithContext(ctx)
+
+	GetForUser(testRep, currentConfig)(writer, request)
+	result := writer.Result()
+	writer.Flush()
+
+	respBody, err := ioutil.ReadAll(result.Body)
+	require.NoError(t, err)
+	result.Body.Close()
+
+	var some []storage.ItemUrls
+	err = json.Unmarshal(respBody, &some)
+	require.NoError(t, err)
+	assert.Equal(t, urlsOrder[1].bodyStr, some[1].FullURL)
+	assert.Equal(t, currentConfig.BaseURL+"/"+urlsOrder[1].expectedPath, some[1].ShortURL)
+
+	newCookie, err := cookieManager.GenerateCookie()
+	require.NoError(t, err)
+	request = httptest.NewRequest(http.MethodGet, currentConfig.BaseURL+"/user/urls", nil)
+	writer = httptest.NewRecorder()
+	ctx = context.WithValue(request.Context(), cookieManager.CookieName, newCookie.Value)
+	request = request.WithContext(ctx)
+
+	GetForUser(testRep, currentConfig)(writer, request)
+	result = writer.Result()
+	writer.Flush()
+
+	var urlsList []byte
+	_, err = result.Body.Read(urlsList)
+	require.NoError(t, err)
+	result.Body.Close()
+
+	assert.Equal(t, "", string(urlsList))
+	assert.Equal(t, http.StatusNoContent, result.StatusCode)
+
+	os.Remove(currentConfig.FileStoragePath)
 }

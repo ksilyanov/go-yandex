@@ -56,9 +56,7 @@ func GetRouter(repository storage.URLRepository, config config.Config) chi.Route
 	r.Get("/{id}", handlers.GetURL(repository))
 	r.Route("/api", func(r chi.Router) {
 		r.Post("/shorten", handlers.SaveURLJson(repository, config))
-		r.Get("/user/urls", func(writer http.ResponseWriter, request *http.Request) {
-			writer.Write([]byte("response"))
-		})
+		r.Get("/user/urls", handlers.GetForUser(repository, config))
 	})
 
 	return r
