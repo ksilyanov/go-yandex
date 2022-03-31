@@ -42,8 +42,9 @@ type FileRepository struct {
 }
 
 type PGRepository struct {
-	DB  *sql.DB
-	ctx context.Context
+	DB     *sql.DB
+	config config.Config
+	ctx    context.Context
 }
 
 func New(config config.Config, ctx context.Context) URLRepository {
@@ -68,8 +69,9 @@ func New(config config.Config, ctx context.Context) URLRepository {
 		}
 
 		r = &PGRepository{
-			DB:  db,
-			ctx: ctx,
+			DB:     db,
+			ctx:    ctx,
+			config: config,
 		}
 	}
 
@@ -91,7 +93,7 @@ func (r PGRepository) Store(url string, userToken string) (string, error) {
 	}
 
 	if shortURL != "" {
-		return shortURL, nil
+		return r.config.BaseURL + "/" + shortURL, nil
 	}
 
 	err = r.DB.QueryRowContext(
@@ -105,7 +107,7 @@ func (r PGRepository) Store(url string, userToken string) (string, error) {
 		return "", err
 	}
 
-	return shortURL, nil
+	return r.config.BaseURL + "/" + shortURL, nil
 }
 
 func (r PGRepository) Find(shortURL string) (string, error) {
