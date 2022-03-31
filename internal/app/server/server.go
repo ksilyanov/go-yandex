@@ -58,6 +58,7 @@ func GetRouter(repository storage.URLRepository, config config.Config) chi.Route
 		r.Post("/shorten", handlers.SaveURLJson(repository, config))
 		r.Get("/user/urls", handlers.GetForUser(repository, config))
 	})
+	r.Get("/ping", handlers.GetDBStatus(repository))
 
 	return r
 }

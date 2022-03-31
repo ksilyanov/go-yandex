@@ -126,6 +126,17 @@ func GetForUser(repository storage.URLRepository, config config.Config) func(wri
 	}
 }
 
+func GetDBStatus(repository storage.URLRepository) func(writer http.ResponseWriter, request *http.Request) {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		dbStatus := repository.PingDB()
+		if dbStatus {
+			writer.WriteHeader(http.StatusOK)
+		} else {
+			writer.WriteHeader(http.StatusInternalServerError)
+		}
+	}
+}
+
 func getUserToken(r *http.Request) string {
 	return r.Context().Value(cookieManager.CookieName).(string)
 }

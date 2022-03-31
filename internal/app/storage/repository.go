@@ -2,17 +2,23 @@ package storage
 
 import (
 	"bufio"
+	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
+	_ "github.com/jackc/pgx/stdlib"
 	"go-yandex/internal/app/config"
+	"log"
 	"os"
 	"strconv"
+	"time"
 )
 
 type URLRepository interface {
 	Find(shortURL string) (string, error)
 	Store(url string, userToken string) (string, error)
-	GetByUser(token string) ([]ItemUrls, error)
+	GetByUser(token string) ([]ItemURL, error)
+	PingDB() bool
 }
 
 type item struct {
@@ -21,7 +27,7 @@ type item struct {
 	User     string `json:"user"`
 }
 
-type ItemUrls struct {
+type ItemURL struct {
 	ShortURL string `json:"short_url"`
 	FullURL  string `json:"original_url"`
 }
@@ -35,7 +41,12 @@ type FileRepository struct {
 	config config.Config
 }
 
-func New(config config.Config) URLRepository {
+type PGRepository struct {
+	DB  *sql.DB
+	ctx context.Context
+}
+
+func New(config config.Config, ctx context.Context) URLRepository {
 	var r URLRepository
 	if config.FileStoragePath != "" {
 		r = &FileRepository{config}
@@ -43,7 +54,108 @@ func New(config config.Config) URLRepository {
 		r = &Repository{config: config}
 	}
 
+	if config.DBDSN == "" {
+		return r
+	}
+
+	db, err := sql.Open("pgx", config.DBDSN)
+	if err != nil {
+		db.Close()
+	} else {
+		_, err = db.Exec("create table if not exists urls (id BIGSERIAL primary key, full_url text, user_token text)")
+		if err != nil {
+			log.Fatalln(err.Error())
+		}
+
+		r = &PGRepository{
+			DB:  db,
+			ctx: ctx,
+		}
+	}
+
 	return r
+}
+
+func (r PGRepository) Store(url string, userToken string) (string, error) {
+	var shortURL string
+
+	err := r.DB.QueryRowContext(
+		r.ctx,
+		"select id from urls where full_url = $1 and user_token = $2",
+		url,
+		userToken,
+	).Scan(&shortURL)
+
+	if err != nil && err != sql.ErrNoRows {
+		return "", err
+	}
+
+	if shortURL != "" {
+		return shortURL, nil
+	}
+
+	err = r.DB.QueryRowContext(
+		r.ctx,
+		"insert into urls (full_url, user_token) VALUES ($1, $2) RETURNING id",
+		url,
+		userToken,
+	).Scan(&shortURL)
+
+	if err != nil {
+		return "", err
+	}
+
+	return shortURL, nil
+}
+
+func (r PGRepository) Find(shortURL string) (string, error) {
+	var fullURL string
+
+	err := r.DB.QueryRowContext(
+		r.ctx,
+		"select full_url from urls where id = $1",
+		shortURL,
+	).Scan(&fullURL)
+
+	if err != nil {
+		return "", err
+	}
+
+	return fullURL, nil
+}
+
+func (r PGRepository) GetByUser(token string) ([]ItemURL, error) {
+	var res []ItemURL
+	var itemURL ItemURL
+
+	row, err := r.DB.QueryContext(
+		r.ctx,
+		"select id, full_url from urls where user_token = $1",
+		token,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	for row.Next() {
+		row.Scan(&itemURL.ShortURL, &itemURL.FullURL)
+		res = append(res, itemURL)
+	}
+
+	return res, nil
+}
+
+func (r PGRepository) PingDB() bool {
+	ctx, cancel := context.WithTimeout(r.ctx, 1*time.Second)
+	defer cancel()
+
+	err := r.DB.PingContext(ctx)
+	if err != nil {
+		log.Print(err.Error())
+		return false
+	}
+
+	return true
 }
 
 func (r *FileRepository) Store(newURL string, userToken string) (string, error) {
@@ -131,14 +243,14 @@ func (r *FileRepository) Find(shortURL string) (string, error) {
 	return "", errors.New("not found")
 }
 
-func (r *FileRepository) GetByUser(token string) ([]ItemUrls, error) {
+func (r *FileRepository) GetByUser(token string) ([]ItemURL, error) {
 	file, err := os.OpenFile(r.config.FileStoragePath, os.O_APPEND|os.O_CREATE|os.O_RDONLY, 0777)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	var items []ItemUrls
+	var items []ItemURL
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -150,7 +262,7 @@ func (r *FileRepository) GetByUser(token string) ([]ItemUrls, error) {
 		}
 
 		if token == item.User {
-			items = append(items, ItemUrls{
+			items = append(items, ItemURL{
 				item.ShortURL,
 				item.FullURL,
 			})
@@ -158,6 +270,10 @@ func (r *FileRepository) GetByUser(token string) ([]ItemUrls, error) {
 	}
 
 	return items, nil
+}
+
+func (r *FileRepository) PingDB() bool {
+	return true
 }
 
 func (r *Repository) Store(u string, userToken string) (string, error) {
@@ -199,13 +315,13 @@ func (r *Repository) Find(shortURL string) (string, error) {
 	return "", err
 }
 
-func (r *Repository) GetByUser(token string) ([]ItemUrls, error) {
+func (r *Repository) GetByUser(token string) ([]ItemURL, error) {
 
-	var res []ItemUrls
+	var res []ItemURL
 
 	for i := range r.items {
 		if r.items[i].User == token {
-			resItem := ItemUrls{
+			resItem := ItemURL{
 				r.items[i].ShortURL,
 				r.items[i].FullURL,
 			}
@@ -214,4 +330,8 @@ func (r *Repository) GetByUser(token string) ([]ItemUrls, error) {
 	}
 
 	return res, nil
+}
+
+func (r *Repository) PingDB() bool {
+	return true
 }

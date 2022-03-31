@@ -73,7 +73,8 @@ func TestRouter(t *testing.T) {
 		},
 	}
 
-	var testRep = storage.New(currentConfig)
+	ctx := context.Background()
+	var testRep = storage.New(currentConfig, ctx)
 	curCookie, err := cookieManager.GenerateCookie()
 	require.NoError(t, err)
 
@@ -121,7 +122,8 @@ func TestRouter(t *testing.T) {
 
 	request := httptest.NewRequest(http.MethodGet, currentConfig.BaseURL+"/user/urls", nil)
 	writer := httptest.NewRecorder()
-	ctx := context.WithValue(request.Context(), cookieManager.CookieName, curCookie.Value)
+	request = request.WithContext(ctx)
+	ctx = context.WithValue(request.Context(), cookieManager.CookieName, curCookie.Value)
 	request = request.WithContext(ctx)
 
 	GetForUser(testRep, currentConfig)(writer, request)
@@ -132,7 +134,7 @@ func TestRouter(t *testing.T) {
 	require.NoError(t, err)
 	result.Body.Close()
 
-	var some []storage.ItemUrls
+	var some []storage.ItemURL
 	err = json.Unmarshal(respBody, &some)
 	require.NoError(t, err)
 	assert.Equal(t, urlsOrder[1].bodyStr, some[1].FullURL)
