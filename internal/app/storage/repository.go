@@ -140,7 +140,11 @@ func (r PGRepository) GetByUser(token string) ([]ItemURL, error) {
 	}
 
 	for row.Next() {
-		row.Scan(&itemURL.ShortURL, &itemURL.FullURL)
+		err = row.Scan(&itemURL.ShortURL, &itemURL.FullURL)
+		if err != nil {
+			return nil, err
+		}
+
 		res = append(res, itemURL)
 	}
 
