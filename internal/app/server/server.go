@@ -7,7 +7,7 @@ import (
 	"go-yandex/internal/app/config"
 	"go-yandex/internal/app/handlers"
 	"go-yandex/internal/app/middlewares/compressor"
-	"go-yandex/internal/app/middlewares/cookie_manager"
+	"go-yandex/internal/app/middlewares/cookiemanager"
 	"go-yandex/internal/app/storage"
 	"log"
 	"net/http"
@@ -49,7 +49,7 @@ func GetRouter(repository storage.URLRepository, config config.Config) chi.Route
 	r.Use(
 		middleware.Logger,
 		compressor.GzipHandler,
-		cookie_manager.Handler,
+		cookiemanager.Handler,
 	)
 
 	r.Post("/", handlers.SaveURL(repository, config))

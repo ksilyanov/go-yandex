@@ -1,4 +1,4 @@
-package cookie_manager
+package cookiemanager
 
 import (
 	"context"
@@ -10,12 +10,14 @@ import (
 	"net/http"
 )
 
-var cookieName = "token"
+type CookieNameType string
+
+var cookieName CookieNameType = "token"
 var secretKey = []byte("pd15KD$^")
 
 func Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		cookie, err := request.Cookie(GetCookieName())
+		cookie, err := request.Cookie(string(GetCookieName()))
 		if err == nil {
 			data, err := hex.DecodeString(cookie.Value)
 			if err != nil {
@@ -59,7 +61,7 @@ func GenerateCookie() (cookie *http.Cookie, err error) {
 	h.Write(b)
 
 	cookie = &http.Cookie{
-		Name:  GetCookieName(),
+		Name:  string(GetCookieName()),
 		Value: hex.EncodeToString(b) + hex.EncodeToString(h.Sum(nil)),
 		Path:  "/",
 	}
@@ -67,6 +69,6 @@ func GenerateCookie() (cookie *http.Cookie, err error) {
 	return cookie, nil
 }
 
-func GetCookieName() string {
+func GetCookieName() CookieNameType {
 	return cookieName
 }

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"go-yandex/internal/app/config"
-	"go-yandex/internal/app/middlewares/cookie_manager"
+	"go-yandex/internal/app/middlewares/cookiemanager"
 	"go-yandex/internal/app/storage"
 	"io"
 	"net/http"
@@ -138,5 +138,5 @@ func GetDBStatus(repository storage.URLRepository) func(writer http.ResponseWrit
 }
 
 func getUserToken(r *http.Request) string {
-	return r.Context().Value(cookie_manager.GetCookieName()).(string)
+	return r.Context().Value(string(cookiemanager.GetCookieName())).(string)
 }

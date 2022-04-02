@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go-yandex/internal/app/config"
-	"go-yandex/internal/app/middlewares/cookie_manager"
+	"go-yandex/internal/app/middlewares/cookiemanager"
 	"go-yandex/internal/app/storage"
 	"io/ioutil"
 	"net/http"
@@ -75,14 +75,14 @@ func TestRouter(t *testing.T) {
 
 	ctx := context.Background()
 	var testRep = storage.New(currentConfig, ctx)
-	curCookie, err := cookie_manager.GenerateCookie()
+	curCookie, err := cookiemanager.GenerateCookie()
 	require.NoError(t, err)
 
 	for _, tc := range urlsOrder {
 		request := httptest.NewRequest(tc.method, currentConfig.BaseURL+"/"+tc.path, bytes.NewBufferString(tc.bodyStr))
 		writer := httptest.NewRecorder()
 
-		ctx := context.WithValue(request.Context(), cookie_manager.GetCookieName(), curCookie.Value)
+		ctx := context.WithValue(request.Context(), cookiemanager.GetCookieName(), curCookie.Value)
 		request = request.WithContext(ctx)
 
 		if tc.method == http.MethodPost {
@@ -123,7 +123,7 @@ func TestRouter(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, currentConfig.BaseURL+"/user/urls", nil)
 	writer := httptest.NewRecorder()
 	request = request.WithContext(ctx)
-	ctx = context.WithValue(request.Context(), cookie_manager.GetCookieName(), curCookie.Value)
+	ctx = context.WithValue(request.Context(), cookiemanager.GetCookieName(), curCookie.Value)
 	request = request.WithContext(ctx)
 
 	GetForUser(testRep, currentConfig)(writer, request)
@@ -140,11 +140,11 @@ func TestRouter(t *testing.T) {
 	assert.Equal(t, urlsOrder[1].bodyStr, some[1].FullURL)
 	assert.Equal(t, currentConfig.BaseURL+"/"+urlsOrder[1].expectedPath, some[1].ShortURL)
 
-	newCookie, err := cookie_manager.GenerateCookie()
+	newCookie, err := cookiemanager.GenerateCookie()
 	require.NoError(t, err)
 	request = httptest.NewRequest(http.MethodGet, currentConfig.BaseURL+"/user/urls", nil)
 	writer = httptest.NewRecorder()
-	ctx = context.WithValue(request.Context(), cookie_manager.GetCookieName(), newCookie.Value)
+	ctx = context.WithValue(request.Context(), cookiemanager.GetCookieName(), newCookie.Value)
 	request = request.WithContext(ctx)
 
 	GetForUser(testRep, currentConfig)(writer, request)
