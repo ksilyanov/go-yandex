@@ -138,5 +138,5 @@ func GetDBStatus(repository storage.URLRepository) func(writer http.ResponseWrit
 }
 
 func getUserToken(r *http.Request) string {
-	return r.Context().Value(string(cookiemanager.GetCookieName())).(string)
+	return r.Context().Value(cookiemanager.GetCookieName()).(string)
 }
