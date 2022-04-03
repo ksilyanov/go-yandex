@@ -53,51 +53,72 @@ type FileRepository struct {
 }
 
 type PGRepository struct {
-	DB     *sql.DB
+	DB     *DataBase
 	config config.Config
 	ctx    context.Context
 }
 
+type DataBase struct {
+	conn *sql.DB
+}
+
 func New(config config.Config, ctx context.Context) URLRepository {
 	var r URLRepository
-	if config.FileStoragePath != "" {
-		r = &FileRepository{config}
-	} else {
-		r = &Repository{config: config}
+
+	if config.DBDSN != "" {
+		db, err := sql.Open("pgx", config.DBDSN)
+		if err != nil {
+			db.Close()
+		} else {
+			_, err = db.Exec("create table if not exists urls (id BIGSERIAL primary key, full_url text, user_token text, correlation_id text)")
+			if err != nil {
+				db.Close()
+				log.Fatalln(err.Error())
+			}
+
+			if err := db.Ping(); err != nil {
+				db.Close()
+				log.Fatalln(err.Error())
+			}
+
+			_, err := db.Exec("select 'public.urls'::regclass")
+			if err != nil {
+				println(err.Error())
+				db.Close()
+			}
+
+			_, err = db.Exec("create unique index if not exists urls_full_url_uindex on urls (full_url);")
+			if err != nil {
+				db.Close()
+				log.Fatalln(err.Error())
+			}
+
+			dataBase := &DataBase{
+				conn: db,
+			}
+
+			r = &PGRepository{
+				DB:     dataBase,
+				ctx:    ctx,
+				config: config,
+			}
+
+			return r
+		}
 	}
 
-	if config.DBDSN == "" {
+	if config.FileStoragePath != "" {
+		r = &FileRepository{config}
 		return r
 	}
 
-	db, err := sql.Open("pgx", config.DBDSN)
-	if err != nil {
-		db.Close()
-	} else {
-		_, err = db.Exec("create table if not exists urls (id BIGSERIAL primary key, full_url text, user_token text, correlation_id text)")
-		if err != nil {
-			log.Fatalln(err.Error())
-		}
-
-		_, err = db.Exec("create unique index if not exists urls_full_url_uindex on urls (full_url);")
-		if err != nil {
-			log.Fatalln(err.Error())
-		}
-
-		r = &PGRepository{
-			DB:     db,
-			ctx:    ctx,
-			config: config,
-		}
-	}
-
-	return r
+	return &Repository{config: config}
 }
 
 func (r PGRepository) Store(url string, userToken string) (string, error) {
 	var shortURL string
 
-	err := r.DB.QueryRowContext(
+	err := r.DB.conn.QueryRowContext(
 		r.ctx,
 		"select id from urls where full_url = $1 and user_token = $2",
 		url,
@@ -112,7 +133,7 @@ func (r PGRepository) Store(url string, userToken string) (string, error) {
 		return r.config.BaseURL + "/" + shortURL, nil
 	}
 
-	err = r.DB.QueryRowContext(
+	err = r.DB.conn.QueryRowContext(
 		r.ctx,
 		"insert into urls (full_url, user_token) VALUES ($1, $2) RETURNING id",
 		url,
@@ -129,7 +150,7 @@ func (r PGRepository) Store(url string, userToken string) (string, error) {
 func (r PGRepository) Find(shortURL string) (string, error) {
 	var fullURL string
 
-	err := r.DB.QueryRowContext(
+	err := r.DB.conn.QueryRowContext(
 		r.ctx,
 		"select full_url from urls where id = $1",
 		shortURL,
@@ -146,7 +167,7 @@ func (r PGRepository) GetByUser(token string) ([]ItemURL, error) {
 	var res []ItemURL
 	var itemURL ItemURL
 
-	row, err := r.DB.QueryContext(
+	row, err := r.DB.conn.QueryContext(
 		r.ctx,
 		"select id, full_url from urls where user_token = $1",
 		token,
@@ -176,7 +197,7 @@ func (r PGRepository) PingDB() bool {
 	ctx, cancel := context.WithTimeout(r.ctx, 1*time.Second)
 	defer cancel()
 
-	err := r.DB.PingContext(ctx)
+	err := r.DB.conn.PingContext(ctx)
 	if err != nil {
 		log.Print(err.Error())
 		return false
@@ -190,7 +211,7 @@ func (r PGRepository) Batch(items []BatchItem) ([]BatchResultItem, error) {
 	var id = 0
 
 	for _, batchItem := range items {
-		row := r.DB.QueryRowContext(
+		row := r.DB.conn.QueryRowContext(
 			r.ctx,
 			"insert into urls (full_url, correlation_id) VALUES ($1, $2)"+
 				"on conflict(full_url) do update set full_url = excluded.full_url RETURNING id",
