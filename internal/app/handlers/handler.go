@@ -7,6 +7,7 @@ import (
 	"go-yandex/internal/app/middlewares/cookiemanager"
 	"go-yandex/internal/app/storage"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"strings"
 )
@@ -86,6 +87,54 @@ func SaveURLJson(repository storage.URLRepository, config config.Config) func(wr
 		writer.WriteHeader(http.StatusCreated)
 		_, err = writer.Write(buf.Bytes())
 
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
+func SaveBatch(repository storage.URLRepository, config config.Config) func(writer http.ResponseWriter, request *http.Request) {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		body, err := ioutil.ReadAll(request.Body)
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if len(body) == 0 {
+			http.Error(writer, "empty request", http.StatusBadRequest)
+			return
+		}
+
+		var items []storage.BatchItem
+		err = json.Unmarshal(body, &items)
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		resItems, err := repository.Batch(items)
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		for i := range resItems {
+			resItems[i].ShortURL = config.BaseURL + "/" + resItems[i].ShortURL
+		}
+
+		var buf bytes.Buffer
+		err = json.NewEncoder(&buf).Encode(resItems)
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		writer.Header().Set("content-type", "application/json")
+		writer.WriteHeader(http.StatusCreated)
+
+		_, err = writer.Write(buf.Bytes())
 		if err != nil {
 			http.Error(writer, err.Error(), http.StatusInternalServerError)
 			return

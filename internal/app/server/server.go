@@ -56,6 +56,7 @@ func GetRouter(repository storage.URLRepository, config config.Config) chi.Route
 	r.Get("/{id}", handlers.GetURL(repository))
 	r.Route("/api", func(r chi.Router) {
 		r.Post("/shorten", handlers.SaveURLJson(repository, config))
+		r.Post("/shorten/batch", handlers.SaveBatch(repository, config))
 		r.Get("/user/urls", handlers.GetForUser(repository, config))
 	})
 	r.Get("/ping", handlers.GetDBStatus(repository))

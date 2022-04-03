@@ -19,6 +19,7 @@ type URLRepository interface {
 	Store(url string, userToken string) (string, error)
 	GetByUser(token string) ([]ItemURL, error)
 	PingDB() bool
+	Batch(items []BatchItem) ([]BatchResultItem, error)
 }
 
 type item struct {
@@ -30,6 +31,16 @@ type item struct {
 type ItemURL struct {
 	ShortURL string `json:"short_url"`
 	FullURL  string `json:"original_url"`
+}
+
+type BatchItem struct {
+	CorrectionID string `json:"correlation_id"`
+	OriginalURL  string `json:"original_url"`
+}
+
+type BatchResultItem struct {
+	CorrectionID string `json:"correlation_id"`
+	ShortURL     string `json:"short_url"`
 }
 
 type Repository struct {
@@ -63,7 +74,12 @@ func New(config config.Config, ctx context.Context) URLRepository {
 	if err != nil {
 		db.Close()
 	} else {
-		_, err = db.Exec("create table if not exists urls (id BIGSERIAL primary key, full_url text, user_token text)")
+		_, err = db.Exec("create table if not exists urls (id BIGSERIAL primary key, full_url text, user_token text, correlation_id text)")
+		if err != nil {
+			log.Fatalln(err.Error())
+		}
+
+		_, err = db.Exec("create unique index if not exists urls_full_url_uindex on urls (full_url);")
 		if err != nil {
 			log.Fatalln(err.Error())
 		}
@@ -167,6 +183,34 @@ func (r PGRepository) PingDB() bool {
 	}
 
 	return true
+}
+
+func (r PGRepository) Batch(items []BatchItem) ([]BatchResultItem, error) {
+	var res []BatchResultItem
+	var id = 0
+
+	for _, batchItem := range items {
+		row := r.DB.QueryRowContext(
+			r.ctx,
+			"insert into urls (full_url, correlation_id) VALUES ($1, $2)"+
+				"on conflict(full_url) do update set full_url = excluded.full_url RETURNING id",
+			batchItem.OriginalURL,
+			batchItem.CorrectionID,
+		)
+		err := row.Scan(&id)
+		if err != nil {
+			return nil, err
+		}
+
+		resItem := BatchResultItem{
+			CorrectionID: batchItem.CorrectionID,
+			ShortURL:     strconv.Itoa(id),
+		}
+
+		res = append(res, resItem)
+	}
+
+	return res, nil
 }
 
 func (r *FileRepository) Store(newURL string, userToken string) (string, error) {
@@ -287,6 +331,10 @@ func (r *FileRepository) PingDB() bool {
 	return true
 }
 
+func (r *FileRepository) Batch(items []BatchItem) ([]BatchResultItem, error) {
+	return nil, nil
+}
+
 func (r *Repository) Store(u string, userToken string) (string, error) {
 
 	for i := 0; i < len(r.items); i++ {
@@ -345,4 +393,8 @@ func (r *Repository) GetByUser(token string) ([]ItemURL, error) {
 
 func (r *Repository) PingDB() bool {
 	return true
+}
+
+func (r *Repository) Batch(items []BatchItem) ([]BatchResultItem, error) {
+	return nil, nil
 }
