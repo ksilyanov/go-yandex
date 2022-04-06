@@ -181,6 +181,8 @@ func (r PGRepository) GetByUser(token string) ([]ItemURL, error) {
 			return nil, err
 		}
 
+		itemURL.ShortURL = r.config.BaseURL + "/" + itemURL.ShortURL
+
 		res = append(res, itemURL)
 	}
 
