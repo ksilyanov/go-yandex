@@ -120,9 +120,8 @@ func (r PGRepository) Store(url string, userToken string) (string, error) {
 
 	err := r.DB.conn.QueryRowContext(
 		r.ctx,
-		"select id from urls where full_url = $1 and user_token = $2",
+		"select id from urls where full_url = $1",
 		url,
-		userToken,
 	).Scan(&shortURL)
 
 	if err != nil && err != sql.ErrNoRows {
@@ -214,7 +213,8 @@ func (r PGRepository) Batch(items []BatchItem) ([]BatchResultItem, error) {
 		row := r.DB.conn.QueryRowContext(
 			r.ctx,
 			"insert into urls (full_url, correlation_id) VALUES ($1, $2)"+
-				"on conflict(full_url) do update set full_url = excluded.full_url RETURNING id",
+				" on conflict(full_url) do update set full_url = excluded.full_url, correlation_id = $2"+
+				" returning id",
 			batchItem.OriginalURL,
 			batchItem.CorrectionID,
 		)
@@ -360,7 +360,7 @@ func (r *Repository) Store(u string, userToken string) (string, error) {
 
 	for i := 0; i < len(r.items); i++ {
 		if r.items[i].FullURL == u {
-			return strconv.Itoa(i + 1), nil
+			return r.config.BaseURL + "/" + strconv.Itoa(i+1), nil
 		}
 	}
 
