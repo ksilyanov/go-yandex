@@ -4,9 +4,10 @@ import (
 	"context"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"go-yandex/internal/app/compressor"
 	"go-yandex/internal/app/config"
 	"go-yandex/internal/app/handlers"
+	"go-yandex/internal/app/middlewares/compressor"
+	"go-yandex/internal/app/middlewares/cookiemanager"
 	"go-yandex/internal/app/storage"
 	"log"
 	"net/http"
@@ -47,14 +48,18 @@ func GetRouter(repository storage.URLRepository, config config.Config) chi.Route
 	r := chi.NewRouter()
 	r.Use(
 		middleware.Logger,
-		compressor.GzipHandle,
+		compressor.GzipHandler,
+		cookiemanager.Handler,
 	)
 
 	r.Post("/", handlers.SaveURL(repository, config))
 	r.Get("/{id}", handlers.GetURL(repository))
 	r.Route("/api", func(r chi.Router) {
 		r.Post("/shorten", handlers.SaveURLJson(repository, config))
+		r.Post("/shorten/batch", handlers.SaveBatch(repository, config))
+		r.Get("/user/urls", handlers.GetForUser(repository, config))
 	})
+	r.Get("/ping", handlers.GetDBStatus(repository))
 
 	return r
 }
