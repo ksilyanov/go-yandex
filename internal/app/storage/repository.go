@@ -19,13 +19,14 @@ type URLRepository interface {
 	Store(url string, userToken string) (string, error)
 	GetByUser(token string) ([]ItemURL, error)
 	PingDB() bool
-	Batch(items []BatchItem) ([]BatchResultItem, error)
+	Batch(items []BatchItem, token string) ([]BatchResultItem, error)
 }
 
 type item struct {
 	FullURL  string `json:"full_url"`
 	ShortURL string `json:"short_url"`
-	User     string `json:"user"`
+	User     string `json:"user_token"`
+	CorrId   string `json:"correlation_id"`
 }
 
 type ItemURL struct {
@@ -207,18 +208,19 @@ func (r PGRepository) PingDB() bool {
 	return true
 }
 
-func (r PGRepository) Batch(items []BatchItem) ([]BatchResultItem, error) {
+func (r PGRepository) Batch(items []BatchItem, token string) ([]BatchResultItem, error) {
 	var res []BatchResultItem
 	var id = 0
 
 	for _, batchItem := range items {
 		row := r.DB.conn.QueryRowContext(
 			r.ctx,
-			"insert into urls (full_url, correlation_id) VALUES ($1, $2)"+
+			"insert into urls (full_url, correlation_id, user_token) VALUES ($1, $2, $3)"+
 				" on conflict(full_url) do update set full_url = excluded.full_url, correlation_id = $2"+
 				" returning id",
 			batchItem.OriginalURL,
 			batchItem.CorrectionID,
+			token,
 		)
 		err := row.Scan(&id)
 		if err != nil {
@@ -266,6 +268,7 @@ func (r *FileRepository) Store(newURL string, userToken string) (string, error) 
 		newURL,
 		r.config.BaseURL + "/" + strconv.Itoa(ln+1),
 		userToken,
+		"",
 	}
 
 	writer := bufio.NewWriter(file)
@@ -354,8 +357,82 @@ func (r *FileRepository) PingDB() bool {
 	return true
 }
 
-func (r *FileRepository) Batch(items []BatchItem) ([]BatchResultItem, error) {
-	return nil, nil
+func (r *FileRepository) Batch(items []BatchItem, token string) ([]BatchResultItem, error) {
+	var res []BatchResultItem
+
+	file, err := os.OpenFile(r.config.FileStoragePath, os.O_APPEND|os.O_CREATE|os.O_RDONLY, 0777)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	itemsToSkip := make(map[int]struct{})
+
+	scanner := bufio.NewScanner(file)
+	ln := 0
+	for scanner.Scan() {
+		ln++
+		data := scanner.Bytes()
+
+		existsBatchItem := item{}
+		if err := json.Unmarshal(data, &existsBatchItem); err != nil {
+			return nil, err
+		}
+		existsBatchResultItem := BatchResultItem{}
+		if err := json.Unmarshal(data, &existsBatchResultItem); err != nil {
+			return nil, err
+		}
+
+		for i, item := range items {
+			if existsBatchItem.FullURL != item.OriginalURL {
+				continue
+			}
+			itemsToSkip[i] = struct{}{}
+			existsBatchResultItem.CorrectionID = item.CorrectionID
+			res = append(res, existsBatchResultItem)
+
+			break
+		}
+	}
+
+	writer := bufio.NewWriter(file)
+	for i, batchItem := range items {
+		_, ok := itemsToSkip[i]
+		if ok {
+			continue
+		}
+
+		newShortURL := strconv.Itoa(ln + 1)
+		newItem := item{
+			FullURL:  batchItem.OriginalURL,
+			ShortURL: newShortURL,
+			User:     token,
+			CorrId:   batchItem.CorrectionID,
+		}
+
+		data, err := json.Marshal(&newItem)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := writer.Write(data); err != nil {
+			return nil, err
+		}
+		if _, err := writer.Write([]byte("\n")); err != nil {
+			return nil, err
+		}
+
+		ln++
+
+		res = append(res, BatchResultItem{
+			CorrectionID: batchItem.CorrectionID,
+			ShortURL:     newShortURL,
+		})
+	}
+	if err := writer.Flush(); err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
 
 func (r *Repository) Store(u string, userToken string) (string, error) {
@@ -418,6 +495,45 @@ func (r *Repository) PingDB() bool {
 	return true
 }
 
-func (r *Repository) Batch(items []BatchItem) ([]BatchResultItem, error) {
-	return nil, nil
+func (r *Repository) Batch(items []BatchItem, token string) ([]BatchResultItem, error) {
+	var res []BatchResultItem
+	itemsToSkip := make(map[int]struct{})
+	curLen := len(r.items)
+
+	for i, newItem := range items {
+		for _, existsItem := range r.items {
+			if existsItem.FullURL == newItem.OriginalURL {
+				existsItem.CorrId = newItem.CorrectionID
+
+				res = append(res, BatchResultItem{
+					CorrectionID: existsItem.CorrId,
+					ShortURL:     existsItem.ShortURL,
+				})
+
+				itemsToSkip[i] = struct{}{}
+			}
+		}
+	}
+
+	for i, newItem := range items {
+		_, ok := itemsToSkip[i]
+		if ok {
+			continue
+		}
+
+		itemToAdd := item{
+			FullURL:  newItem.OriginalURL,
+			ShortURL: strconv.Itoa(curLen + 1),
+			User:     token,
+			CorrId:   newItem.CorrectionID,
+		}
+		r.items = append(r.items, itemToAdd)
+
+		res = append(res, BatchResultItem{
+			CorrectionID: itemToAdd.CorrId,
+			ShortURL:     itemToAdd.ShortURL,
+		})
+	}
+
+	return res, nil
 }

@@ -114,7 +114,7 @@ func SaveBatch(repository storage.URLRepository, config config.Config) func(writ
 			return
 		}
 
-		resItems, err := repository.Batch(items)
+		resItems, err := repository.Batch(items, getUserToken(request))
 		if err != nil {
 			http.Error(writer, err.Error(), http.StatusInternalServerError)
 			return
