@@ -70,6 +70,7 @@ func New(config config.Config, ctx context.Context) URLRepository {
 		db, err := sql.Open("pgx", config.DBDSN)
 		if err != nil {
 			db.Close()
+			log.Fatalln(err.Error())
 		} else {
 			_, err = db.Exec("create table if not exists urls (id BIGSERIAL primary key, full_url text, user_token text, correlation_id text)")
 			if err != nil {
