@@ -26,7 +26,7 @@ type item struct {
 	FullURL  string `json:"full_url"`
 	ShortURL string `json:"short_url"`
 	User     string `json:"user_token"`
-	CorrId   string `json:"correlation_id"`
+	CorrID   string `json:"correlation_id"`
 }
 
 type ItemURL struct {
@@ -407,7 +407,7 @@ func (r *FileRepository) Batch(items []BatchItem, token string) ([]BatchResultIt
 			FullURL:  batchItem.OriginalURL,
 			ShortURL: newShortURL,
 			User:     token,
-			CorrId:   batchItem.CorrectionID,
+			CorrID:   batchItem.CorrectionID,
 		}
 
 		data, err := json.Marshal(&newItem)
@@ -503,10 +503,10 @@ func (r *Repository) Batch(items []BatchItem, token string) ([]BatchResultItem, 
 	for i, newItem := range items {
 		for _, existsItem := range r.items {
 			if existsItem.FullURL == newItem.OriginalURL {
-				existsItem.CorrId = newItem.CorrectionID
+				existsItem.CorrID = newItem.CorrectionID
 
 				res = append(res, BatchResultItem{
-					CorrectionID: existsItem.CorrId,
+					CorrectionID: existsItem.CorrID,
 					ShortURL:     existsItem.ShortURL,
 				})
 
@@ -525,12 +525,12 @@ func (r *Repository) Batch(items []BatchItem, token string) ([]BatchResultItem, 
 			FullURL:  newItem.OriginalURL,
 			ShortURL: strconv.Itoa(curLen + 1),
 			User:     token,
-			CorrId:   newItem.CorrectionID,
+			CorrID:   newItem.CorrectionID,
 		}
 		r.items = append(r.items, itemToAdd)
 
 		res = append(res, BatchResultItem{
-			CorrectionID: itemToAdd.CorrId,
+			CorrectionID: itemToAdd.CorrID,
 			ShortURL:     itemToAdd.ShortURL,
 		})
 	}

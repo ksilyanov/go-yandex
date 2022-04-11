@@ -11,6 +11,7 @@ import (
 	"go-yandex/internal/app/middlewares/compressor"
 	"go-yandex/internal/app/middlewares/cookiemanager"
 	"go-yandex/internal/app/storage"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
@@ -61,33 +62,33 @@ func TestRouter(t *testing.T) {
 	link3 := testLinkBase + "3_" + unixNowStr
 	var shortLink1, shortLink2, shortLink3 string
 
-	resp, respBodyStr = testRequest(t, ts, curConfig, http.MethodPost, "/", link1)
+	resp, respBodyStr = testRequest(t, ts, http.MethodPost, "/", link1)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	assert.Regexp(t, curConfig.BaseURL+"/.+", respBodyStr)
 	shortLink1 = strings.Replace(respBodyStr, curConfig.BaseURL+"/", "", 1)
 
-	resp, respBodyStr = testRequest(t, ts, curConfig, http.MethodPost, "/", link1)
+	resp, respBodyStr = testRequest(t, ts, http.MethodPost, "/", link1)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	assert.Equal(t, curConfig.BaseURL+"/"+shortLink1, respBodyStr)
 
-	resp, _ = testRequest(t, ts, curConfig, http.MethodGet, "/"+shortLink1, "")
+	resp, _ = testRequest(t, ts, http.MethodGet, "/"+shortLink1, "")
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	//assert.Equal(t, link1, resp.Header.Get("Location"))
 
-	resp, _ = testRequest(t, ts, curConfig, http.MethodGet, "/not_registered_url", "")
+	resp, _ = testRequest(t, ts, http.MethodGet, "/not_registered_url", "")
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
-	resp, respBodyStr = testRequest(t, ts, curConfig, http.MethodPost, "/api/shorten", "{\"url\":\""+link2+"\"}")
+	resp, respBodyStr = testRequest(t, ts, http.MethodPost, "/api/shorten", "{\"url\":\""+link2+"\"}")
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	assert.Regexp(t, "{\"result\":\""+curConfig.BaseURL+"/.+\"}", respBodyStr)
-	_, respBodyStr = testRequest(t, ts, curConfig, http.MethodPost, "/", link2)
+	_, respBodyStr = testRequest(t, ts, http.MethodPost, "/", link2)
 	shortLink2 = strings.Replace(respBodyStr, curConfig.BaseURL+"/", "", 1)
 
-	resp, respBodyStr = testRequest(t, ts, curConfig, http.MethodPost, "/api/shorten", "{\"url\":\""+link2+"\"}")
+	resp, respBodyStr = testRequest(t, ts, http.MethodPost, "/api/shorten", "{\"url\":\""+link2+"\"}")
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	assert.Equal(t, "{\"result\":\""+curConfig.BaseURL+"/"+shortLink2+"\"}\n", respBodyStr)
 
-	resp, respBodyStr = testRequest(t, ts, curConfig, http.MethodGet, "/api/user/urls", "")
+	resp, respBodyStr = testRequest(t, ts, http.MethodGet, "/api/user/urls", "")
 	testItem1 := "{\"short_url\":\"" + curConfig.BaseURL + "/" + shortLink1 + "\",\"original_url\":\"" + link1 + "\"}"
 	testItem2 := "{\"short_url\":\"" + curConfig.BaseURL + "/" + shortLink2 + "\",\"original_url\":\"" + link2 + "\"}"
 	testUserURLs := "[" + testItem1 + "," + testItem2 + "]\n"
@@ -97,20 +98,20 @@ func TestRouter(t *testing.T) {
 	var testBatchBody, expectedBatchResponse string
 
 	testBatchBody = "[{\"correlation_id\":\"123\",\"original_url\":\"" + link3 + "\"}]"
-	resp, respBodyStr = testRequest(t, ts, curConfig, http.MethodPost, "/api/shorten/batch", testBatchBody)
+	resp, respBodyStr = testRequest(t, ts, http.MethodPost, "/api/shorten/batch", testBatchBody)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-	_, shortLink3Full := testRequest(t, ts, curConfig, http.MethodPost, "/", link3)
+	_, shortLink3Full := testRequest(t, ts, http.MethodPost, "/", link3)
 	shortLink3 = strings.Replace(shortLink3Full, curConfig.BaseURL+"/", "", 1)
 	expectedBatchResponse = "[{\"correlation_id\":\"123\",\"short_url\":\"" + curConfig.BaseURL + "/" + shortLink3 + "\"}]\n"
 	assert.Equal(t, expectedBatchResponse, respBodyStr)
 
 	testBatchBody = "[{\"correlation_id\":\"456\",\"original_url\":\"" + link3 + "\"}]"
 	expectedBatchResponse = "[{\"correlation_id\":\"456\",\"short_url\":\"" + curConfig.BaseURL + "/" + shortLink3 + "\"}]\n"
-	resp, respBodyStr = testRequest(t, ts, curConfig, http.MethodPost, "/api/shorten/batch", testBatchBody)
+	resp, respBodyStr = testRequest(t, ts, http.MethodPost, "/api/shorten/batch", testBatchBody)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	assert.Equal(t, expectedBatchResponse, respBodyStr)
 
-	resp, _ = testRequest(t, ts, curConfig, http.MethodGet, "/ping", "")
+	resp, _ = testRequest(t, ts, http.MethodGet, "/ping", "")
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
@@ -123,7 +124,7 @@ func addClientCookie(t *testing.T, ts *httptest.Server) {
 
 	ts.Client().Jar.SetCookies(&url.URL{Host: ts.URL}, []*http.Cookie{cookie})
 }
-func testRequest(t *testing.T, ts *httptest.Server, config config.Config, method, path string, body string) (*http.Response, string) {
+func testRequest(t *testing.T, ts *httptest.Server, method, path, body string) (*http.Response, string) {
 	var reqContent *bytes.Buffer
 	var content = []byte(body)
 	reqContent = bytes.NewBuffer(content)
@@ -137,7 +138,10 @@ func testRequest(t *testing.T, ts *httptest.Server, config config.Config, method
 	respBody, err := ioutil.ReadAll(resp.Body)
 	assert.NoError(t, err)
 
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		require.NoError(t, err)
+	}(resp.Body)
 
 	return resp, string(respBody)
 }
