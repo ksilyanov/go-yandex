@@ -11,7 +11,6 @@ import (
 	"go-yandex/internal/app/middlewares/compressor"
 	"go-yandex/internal/app/middlewares/cookiemanager"
 	"go-yandex/internal/app/storage"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
@@ -125,9 +124,8 @@ func addClientCookie(t *testing.T, ts *httptest.Server) {
 	ts.Client().Jar.SetCookies(&url.URL{Host: ts.URL}, []*http.Cookie{cookie})
 }
 func testRequest(t *testing.T, ts *httptest.Server, method, path, body string) (*http.Response, string) {
-	var reqContent *bytes.Buffer
 	var content = []byte(body)
-	reqContent = bytes.NewBuffer(content)
+	reqContent := bytes.NewBuffer(content)
 
 	req, err := http.NewRequest(method, ts.URL+path, reqContent)
 	assert.NoError(t, err)
@@ -138,10 +136,8 @@ func testRequest(t *testing.T, ts *httptest.Server, method, path, body string) (
 	respBody, err := ioutil.ReadAll(resp.Body)
 	assert.NoError(t, err)
 
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		require.NoError(t, err)
-	}(resp.Body)
+	defer req.Body.Close()
+	defer resp.Body.Close()
 
 	return resp, string(respBody)
 }
