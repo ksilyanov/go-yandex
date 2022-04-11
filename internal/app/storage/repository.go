@@ -360,7 +360,7 @@ func (r *FileRepository) PingDB() bool {
 func (r *FileRepository) Batch(items []BatchItem, token string) ([]BatchResultItem, error) {
 	var res []BatchResultItem
 
-	file, err := os.OpenFile(r.config.FileStoragePath, os.O_APPEND|os.O_CREATE|os.O_RDONLY, 0777)
+	file, err := os.OpenFile(r.config.FileStoragePath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0777)
 	if err != nil {
 		return nil, err
 	}
