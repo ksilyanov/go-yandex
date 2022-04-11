@@ -229,7 +229,7 @@ func (r PGRepository) Batch(items []BatchItem, token string) ([]BatchResultItem,
 
 		resItem := BatchResultItem{
 			CorrectionID: batchItem.CorrectionID,
-			ShortURL:     strconv.Itoa(id),
+			ShortURL:     r.config.BaseURL + "/" + strconv.Itoa(id),
 		}
 
 		res = append(res, resItem)
@@ -402,7 +402,7 @@ func (r *FileRepository) Batch(items []BatchItem, token string) ([]BatchResultIt
 			continue
 		}
 
-		newShortURL := strconv.Itoa(ln + 1)
+		newShortURL := r.config.BaseURL + "/" + strconv.Itoa(ln+1)
 		newItem := item{
 			FullURL:  batchItem.OriginalURL,
 			ShortURL: newShortURL,
@@ -523,7 +523,7 @@ func (r *Repository) Batch(items []BatchItem, token string) ([]BatchResultItem, 
 
 		itemToAdd := item{
 			FullURL:  newItem.OriginalURL,
-			ShortURL: strconv.Itoa(curLen + 1),
+			ShortURL: r.config.BaseURL + "/" + strconv.Itoa(curLen+1),
 			User:     token,
 			CorrID:   newItem.CorrectionID,
 		}

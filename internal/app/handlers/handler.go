@@ -120,10 +120,6 @@ func SaveBatch(repository storage.URLRepository, config config.Config) func(writ
 			return
 		}
 
-		for i := range resItems {
-			resItems[i].ShortURL = config.BaseURL + "/" + resItems[i].ShortURL
-		}
-
 		var buf bytes.Buffer
 		err = json.NewEncoder(&buf).Encode(resItems)
 		if err != nil {
